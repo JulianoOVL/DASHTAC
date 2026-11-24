@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dashboard – Protocolos de carregamento</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{color-scheme:light;--bg:#f5f6f8;--cd:#fff;--tx:#1a1f2b;--mu:#667085;--bd:#e2e5eb;--ac:#2563eb;--ok:#16a34a;--dh:#d97706;--dd:#dc2626;--out:#7c3aed;--ver:#64748b;--ns:#7f1d1d}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#12151b;--cd:#1b1f27;--tx:#e8eaf0;--mu:#99a1b3;--bd:#2c323d;--ac:#6ea0ff;--ok:#34d399;--dh:#fbbf24;--dd:#f87171;--out:#a78bfa;--ver:#94a3b8;--ns:#fca5a5}}:root[data-theme="dark"]{color-scheme:dark;--bg:#12151b;--cd:#1b1f27;--tx:#e8eaf0;--mu:#99a1b3;--bd:#2c323d;--ac:#6ea0ff;--ok:#34d399;--dh:#fbbf24;--dd:#f87171;--out:#a78bfa;--ver:#94a3b8;--ns:#fca5a5}
+*{box-sizing:border-box}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 "Segoe UI",system-ui,Arial,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--cd);border-bottom:1px solid var(--bd)}
+h1{margin:0;font-size:18px}h1 small{display:block;font-weight:400;color:var(--mu);font-size:12px}
+.tb{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,select,input,textarea{font:inherit;color:var(--tx);background:var(--cd);border:1px solid var(--bd);border-radius:8px;padding:6px 12px}
+button{cursor:pointer}button:hover{border-color:var(--ac)}button.p{background:var(--ac);border-color:var(--ac);color:#fff}
+#tol{width:70px}nav{display:flex;gap:4px;padding:10px 20px 0}nav button{border-radius:8px 8px 0 0;border-bottom:none}nav button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+main{padding:16px 20px 40px}.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.k{background:var(--cd);border:1px solid var(--bd);border-radius:12px;padding:12px 14px;border-top:4px solid var(--c,var(--ac))}.k b{display:block;font-size:26px}.k span{color:var(--mu);font-size:12px}
+.row{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0}.box{background:var(--cd);border:1px solid var(--bd);border-radius:12px;padding:14px}
+.dn{width:150px;height:150px;border-radius:50%;display:grid;place-items:center}.dn i{width:92px;height:92px;border-radius:50%;background:var(--cd);display:grid;place-items:center;font:700 20px/1 inherit;font-style:normal}
+.lg div{display:flex;gap:8px;align-items:center;margin:4px 0}.lg u{width:11px;height:11px;border-radius:3px;display:inline-block;background:var(--c)}
+.tw{overflow:auto;max-height:68vh;border:1px solid var(--bd);border-radius:10px;background:var(--cd)}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:6px 10px;border-bottom:1px solid var(--bd);white-space:nowrap;text-align:left}
+th{position:sticky;top:0;background:var(--cd);z-index:1;color:var(--mu);font-size:12px}
+.ch{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;color:var(--c);border:1px solid var(--c)}
+td[contenteditable]:focus{outline:2px solid var(--ac);background:color-mix(in srgb,var(--ac) 10%,transparent)}
+.hd{font-weight:700}.mu{color:var(--mu)}.note{color:var(--mu);font-size:12px;margin:8px 0}
+#pb{display:none;margin:8px 0}#pb textarea{width:100%;height:120px;font:12px monospace}
+#ts{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:8px 16px;border-radius:99px;display:none}
+</style></head><body>
+<header>
+ <h1>Divergências de agendamento<small>Portal do porto × Base de carregamentos · <span id="up">sem dados publicados</span></small></h1>
+ <div class="tb"><label>Tolerância (min) <input id="tol" type="number" min="0" value="0"></label>
+ <button id="bX">⬇ Exportar resultado</button>
+ <span id="ed" hidden><button id="bI" class="p">⬆ Atualizar dados (Excel)</button><input type="file" id="f" accept=".xlsx,.xlsm,.xls" hidden></span></div>
+</header>
+<div id="bn" class="note" hidden style="margin:10px 20px;padding:10px 14px;border:1px solid var(--ac);border-radius:10px;background:var(--cd)"></div>
+<main id="m"></main><div id="ts"></div>
+<script>
+const $=s=>document.querySelector(s),pad=n=>String(n).padStart(2,'0'),isD=v=>v instanceof Date;
+let DATA=null,DRAFT=null,tol=0,flt='all',q='',P=[],K={},DB=null,DL=null;
+const fm=m=>{if(m==null)return '—';const d=new Date(m*6e4);return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth()+1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`};
+const mn=d=>Math.round(d.getTime()/6e4),str=v=>String(v??'').replace(/\u00a0/g,' ').trim().toUpperCase();
+const RX=/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::\d{2})?)?$/;
+const bm=s=>{const m=RX.exec(String(s??'').trim());return m?Date.UTC(+m[3],m[2]-1,+m[1],+(m[4]||0),+(m[5]||0))/6e4:null};
+const tmv=v=>isD(v)?mn(v):typeof v==='string'?bm(v):null,isC=s=>/^[A-Z]{4}\d{7}$/.test(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const fx=v=>isD(v)?new Date(Date.UTC(v.getFullYear(),v.getMonth(),v.getDate(),v.getHours(),v.getMinutes()+(v.getSeconds()>=30?1:0))):v;
+function parsePortal(R){const o=[];
+ for(let i=0;i<R.length;i++){const r=R[i]||[],c=str(r[2]);
+  if(String(r[0]??'').trim()==='description'){const d=(R[i+4]||[])[0],t=isD(d)?mn(d):null;
+   o.push({c:str((R[i+1]||[])[0]),sit:String((R[i+2]||[])[0]??'').trim(),a:t,b:t,ns:false,tp:'Card em trânsito'});continue}
+  if(!isC(c))continue;const e=r[4];
+  if(isD(e))o.push({c,sit:String(r[0]??'').trim(),a:mn(e),b:isD(r[5])?mn(r[5]):mn(e),ns:false,tp:'Tabela de janelas'});
+  else if(typeof e==='string'&&e.includes(' - ')){const m=e.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/),d0=m&&Date.UTC(+m[3],m[2]-1,+m[1])/6e4;
+   o.push({c,sit:String(r[7]??'').trim()||'—',a:m?d0+m[4]*60+ +m[5]:null,b:m?d0+m[6]*60+ +m[7]:null,ns:str(r[6])==='SIM',tp:'Lista de agendamentos'})}}
+ return o.filter(p=>p.c)}
+function fromSheets(exp,pl){
+ const H=(exp[0]||[]).map(h=>String(h??'').trim().toLowerCase());let ci=H.indexOf('conteiner'),di=H.indexOf('data coleta');if(ci<0)ci=0;if(di<0)di=17;let oi=H.indexOf('nr os');if(oi<0)oi=1;
+ const portal=parsePortal(pl),want=new Set(portal.map(p=>p.c)),base={};
+ exp.slice(1).forEach(r=>{const c=str(r[ci]),t=tmv(r[di]);if(want.has(c)&&t>0)(base[c]=base[c]||[]).push([t,String(r[oi]??'').trim()])});
+ return {portal,base}}
+function compute(d){
+ P=(d.portal||[]).map((x,ix)=>({...x,ix}));
+ P.forEach(p=>{const E=(d.base||{})[p.c]||[],L=E.map(x=>Array.isArray(x)?x[0]:x);p.n=L.length;p.i=null;p.d=null;p.os='';p.out=!L.length;
+  if(p.out){p.st='OK'}else if(p.a==null){p.st='Verificar dados'}else{
+   const w=L.filter(x=>x>=p.a-.5&&x<=p.b+.5);
+   if(w.length)p.i=Math.min(...w);else{const bf=L.filter(x=>x<p.a-.5),af=L.filter(x=>x>p.b+.5),s=bf.length?Math.max(...bf):0,t=af.length?Math.min(...af):0;p.i=!s?t:!t?s:(p.a-s<=t-p.b?s:t)}
+   const ht=E.find(x=>(Array.isArray(x)?x[0]:x)===p.i);p.os=Array.isArray(ht)?ht[1]:'';p.d=p.i<p.a?p.i-p.a:p.i>p.b?p.i-p.b:0;const dy=Math.floor(p.i/1440);
+   p.st=Math.abs(p.d)<=tol?'OK':(dy>=Math.floor(p.a/1440)&&dy<=Math.floor(p.b/1440))?'Divergência de horário':'Divergência de data'}
+  p.rk=(p.ns?0:6)+(p.st==='Divergência de data'?0:p.st==='Divergência de horário'?1:p.st==='Verificar dados'?2:p.out?3:4)});
+ P.sort((a,b)=>a.rk-b.rk||a.ix-b.ix);const c=f=>P.filter(f).length;
+ K={n:P.length,ok:c(p=>p.st==='OK'),dd:c(p=>p.st==='Divergência de data'),dh:c(p=>p.st==='Divergência de horário'),ver:c(p=>p.st==='Verificar dados'),out:c(p=>p.out),ns:c(p=>p.ns)};K.pct=K.n?K.ok/K.n:0}
+const dl=j=>{if(j==null||j===0)return '—';const a=Math.abs(j);return (j>0?'+':'-')+(a>=1440?Math.floor(a/1440)+'d '+pad(Math.floor(a/60)%24)+'h':Math.floor(a/60)+'h'+pad(a%60))};
+const stl=p=>p.out?'NÃO ESTÁ NA EXPORTAÇÃO':p.st,cl=p=>p.out?'--out':p.st==='OK'?'--ok':p.st==='Divergência de data'?'--dd':p.st==='Divergência de horário'?'--dh':'--ver';
+function toast(t){const e=$('#ts');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',3000)}
+function render(){const d=DRAFT||DATA;
+ $('#up').textContent=DRAFT?'pré-visualização (não publicado)':DATA?.at?'atualizado em '+new Date(DATA.at).toLocaleString('pt-BR'):'sem dados publicados';
+ const bn=$('#bn');bn.hidden=!DRAFT;
+ if(DRAFT){bn.innerHTML=`<b>Pré-visualização</b> de ${esc(DRAFT.file)} — ainda não visível para a equipe. <button id="bP" class="p">Publicar para a equipe</button> <button id="bD">Descartar</button>`;
+  $('#bP').onclick=publish;$('#bD').onclick=()=>{DRAFT=null;render()}}
+ if(!d||!d.portal){$('#m').innerHTML='<div class="box note">Nenhum dado publicado ainda. '+($('#ed').hidden?'Aguarde o responsável publicar a primeira atualização.':'Clique em “Atualizar dados (Excel)” e importe a planilha.')+'</div>';return}
+ compute(d);
+ const cards=[['Containers no portal',K.n,'--ac'],['OK',K.ok,'--ok'],['Divergência de data',K.dd,'--dd'],['Divergência de horário',K.dh,'--dh'],['Não está na exportação',K.out,'--out'],['% aderência',(K.pct*100).toFixed(1)+'%','--ok'],['No-show',K.ns,'--ns']];
+ if(K.ver)cards.push(['Verificar dados',K.ver,'--ver']);
+ const seg=[['OK (na base)',K.ok-K.out,'--ok'],['Não está na exportação',K.out,'--out'],['Divergência de horário',K.dh,'--dh'],['Divergência de data',K.dd,'--dd'],['Verificar dados',K.ver,'--ver']];
+ let acc=0;const g=seg.filter(s=>s[1]).map(s=>{const a=acc/K.n*100;acc+=s[1];return `var(${s[2]}) ${a}% ${acc/K.n*100}%`}).join(',')||'var(--bd) 0 100%';
+ const rows=P.filter(p=>(flt==='all'||(flt==='div'&&['Divergência de data','Divergência de horário','Verificar dados'].includes(p.st))||(flt==='ns'&&p.ns)||(flt==='out'&&p.out)||(flt==='ok'&&p.st==='OK'&&!p.out))&&(!q||p.c.includes(q.toUpperCase())));
+ $('#m').innerHTML=`<div class="kp">${cards.map(c=>`<div class="k" style="--c:var(${c[2]})"><b>${c[1]}</b><span>${c[0]}</span></div>`).join('')}</div>
+ <div class="row"><div class="box" style="display:flex;gap:20px;align-items:center"><div class="dn" style="background:conic-gradient(${g})"><i>${(K.pct*100).toFixed(0)}%</i></div>
+ <div class="lg">${seg.map(s=>`<div style="--c:var(${s[2]})"><u></u>${s[0]}: <b>${s[1]}</b></div>`).join('')}</div></div>
+ <div class="box note" style="flex:1;min-width:260px;margin:0"><b>Leitura</b><br>OK = coleta da base dentro da janela do portal (± tolerância). Divergência de horário = mesmo dia, hora fora da janela. Divergência de data = dia diferente. Container que não está na Exportação conta como OK, mas fica destacado em roxo. Diferença: “+” = base depois da janela; “-” = antes.</div></div>
+ <div class="tb" style="margin-bottom:8px"><select id="fl">${[['all','Todos'],['div','Só divergências'],['ns','No-show'],['out','Não está na exportação'],['ok','OK (na base)']].map(o=>`<option value="${o[0]}"${o[0]===flt?' selected':''}>${o[1]}</option>`).join('')}</select>
+ <input id="qs" placeholder="Buscar container…" value="${esc(q)}"><span class="mu">${rows.length} de ${K.n}</span></div>
+ <div class="tw"><table><tr><th>#</th><th>Container</th><th>Nr OS</th><th>Situação portal</th><th>Portal – início</th><th>Portal – fim</th><th>Coleta na base</th><th>Dif.</th><th>Status</th><th>Linhas na base</th><th>No-show</th><th>Origem</th></tr>
+ ${rows.map((p,i)=>`<tr><td class="mu">${i+1}</td><td class="hd">${esc(p.c)}</td><td>${esc(p.os)||'—'}</td><td>${esc(p.sit)}</td><td>${fm(p.a)}</td><td>${fm(p.b)}</td><td>${fm(p.i)}</td><td>${dl(p.d)}</td><td><span class="ch" style="--c:var(${cl(p)})">${stl(p)}</span></td><td>${p.n}</td><td>${p.ns?'<span class="ch" style="--c:var(--ns)">NO SHOW</span>':'—'}</td><td class="mu">${esc(p.tp)}</td></tr>`).join('')}</table></div>`;
+ $('#fl').onchange=e=>{flt=e.target.value;render()};
+ $('#qs').oninput=e=>{q=e.target.value;const p=e.target.selectionStart;render();const n=$('#qs');n.focus();n.setSelectionRange(p,p)}}
+$('#tol').oninput=e=>{tol=Math.max(0,+e.target.value||0);render()};
+$('#bI').onclick=()=>$('#f').click();
+$('#f').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+ try{const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true}),N=wb.SheetNames,nz=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const fd=(re,i)=>N.find(n=>re.test(nz(n)))||N[i],g=n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:null,blankrows:true}).map(r=>r.map(fx));
+  DRAFT={...fromSheets(g(fd(/^(exportacao|importacao)/,0)),g(fd(/^planilha1/,1))),file:f.name};render()}
+ catch(err){alert('Não consegui ler o arquivo: '+err.message)}e.target.value=''};
+async function publish(){if(!DB||!DRAFT)return;const {portal,base}=DRAFT;
+ try{await DB.doc('dash/snapshot').set({portal,base,at:Date.now(),file:DRAFT.file});DRAFT=null;toast('Publicado para a equipe');render()}
+ catch(e){toast('Não foi possível publicar ('+(e.code||'erro')+')')}}
+$('#bX').onclick=async()=>{const d=DRAFT||DATA;if(!d||!d.portal)return;compute(d);
+ const wb=XLSX.utils.book_new(),add=(n,a)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),n);
+ add('Resultado',[['#','Container','Nr OS','Situação portal','Portal – início','Portal – fim','Coleta na base','Diferença','Status','Linhas na base','No-show','Origem'],...P.map((p,i)=>[i+1,p.c,p.os||'—',p.sit,fm(p.a),fm(p.b),fm(p.i),dl(p.d),stl(p),p.n,p.ns?'NO SHOW':'—',p.tp])]);
+ add('Resumo',[['Tolerância (min)',tol],['Containers no portal',K.n],['OK',K.ok],['Divergência de data',K.dd],['Divergência de horário',K.dh],['Não está na exportação',K.out],['% aderência',K.pct],['No-show',K.ns]]);
+ try{if(!DL){toast('Exportar não está disponível aqui');return}await DL.save({filename:'resultado_carregamentos.xlsx',data:XLSX.write(wb,{type:'array',bookType:'xlsx'})});toast('Arquivo exportado')}
+ catch(e){if(e&&e.code!=='declined')toast('Não foi possível exportar ('+(e.code||'erro')+')')}};
+render();
+(async()=>{try{const [db,us,dl]=await Promise.all([claude.use('db'),claude.use('user'),claude.use('downloads')]);DB=db;DL=dl;
+ let ed=false;try{ed=!!(await us?.canEdit())||!!(await us?.isOwner())}catch(e){}
+ $('#ed').hidden=!(ed&&db);
+ if(db)db.doc('dash/snapshot').onSnapshot(s=>{DATA=s.exists?s.data():null;render()},e=>toast('Falha ao ler os dados ('+(e.code||'erro')+')'));
+ else render()}catch(e){render()}})();
+</script></body></html>
